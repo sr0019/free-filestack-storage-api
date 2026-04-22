@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloud Drop | Secure Upload</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <style>
+        :root { --primary: #6366f1; --bg: #0f172a; }
+        body { 
+            font-family: 'Inter', system-ui, sans-serif; 
+            background-color: var(--bg);
+            color: white;
+            display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0;
+        }
+        .upload-card {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255,255,255,0.1);
+            padding: 2rem;
+            border-radius: 1rem;
+            width: 100%; max-width: 450px;
+            text-align: center;
+        }
+        .drop-zone {
+            border: 2px dashed #334155;
+            padding: 2rem;
+            border-radius: 0.75rem;
+            margin: 1.5rem 0;
+            transition: border-color 0.3s;
+        }
+        .drop-zone:hover { border-color: var(--primary); }
+        input[type="file"] { display: none; }
+        .btn {
+            background: var(--primary);
+            color: white; border: none; padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem; cursor: pointer; font-weight: 600; width: 100%;
+        }
+        .progress-bar {
+            height: 8px; width: 0%; background: var(--primary);
+            border-radius: 4px; transition: width 0.2s;
+        }
+        #status { margin-top: 1rem; font-size: 0.9rem; color: #94a3b8; }
+        .link-result {
+            background: #1e293b; padding: 1rem; border-radius: 0.5rem;
+            word-break: break-all; margin-top: 1rem; border: 1px solid var(--primary);
+        }
+    </style>
+</head>
+<body>
+
+<div class="upload-card">
+    <h2>Cloud Drop</h2>
+    <p style="color: #94a3b8">Upload files up to 900MB</p>
+
+    <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+        <span>Click to select or drag & drop</span>
+        <input type="file" id="fileInput">
+    </div>
+
+    <button class="btn" id="uploadBtn" onclick="startUpload()">Start Upload</button>
+
+    <div id="progressWrapper" style="display:none; margin-top: 1.5rem;">
+        <div style="background: #334155; border-radius: 4px; overflow: hidden;">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
+        <div id="status">Ready</div>
+    </div>
+
+    <div id="result"></div>
+</div>
+
+<script>
+    const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB
+    
+    async function startUpload() {
+        const file = document.getElementById('fileInput').files[0];
+        if (!file) return alert("Select a file!");
+
+        const btn = document.getElementById('uploadBtn');
+        const wrapper = document.getElementById('progressWrapper');
+        const bar = document.getElementById('progressBar');
+        const status = document.getElementById('status');
+
+        btn.disabled = true;
+        wrapper.style.display = 'block';
+
+        try {
+            // 1. Start
+            status.innerText = "Initializing...";
+            const startReq = await fetch('/api/start', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ filename: file.name, mimetype: file.type, size: file.size })
+            });
+            const startData = await startReq.json();
+
+            // 2. Upload Chunks (Simplified sequential for Node demo)
+            const totalParts = Math.ceil(file.size / CHUNK_SIZE);
+            const parts = [];
+
+            for (let i = 0; i < totalParts; i++) {
+                const partNum = i + 1;
+                const start = i * CHUNK_SIZE;
+                const end = Math.min(start + CHUNK_SIZE, file.size);
+                const chunk = file.slice(start, end);
+                
+                status.innerText = `Uploading part ${partNum}/${totalParts}...`;
+                
+                // Get upload URL
+                const upReq = await fetch('/api/upload', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        part: partNum,
+                        size: chunk.size,
+                        upload_id: startData.upload_id,
+                        uri: startData.uri,
+                        location_url: startData.location_url
+                    })
+                });
+                const upData = await upReq.json();
+
+                // Direct S3 Put
+                const s3Res = await fetch(upData.url, {
+                    method: 'PUT',
+                    headers: upData.headers,
+                    body: chunk
+                });
+
+                parts.push({ part_number: partNum, etag: s3Res.headers.get('ETag') });
+                bar.style.width = `${(partNum / totalParts) * 100}%`;
+            }
+
+            // 3. Complete
+            status.innerText = "Finalizing...";
+            const compReq = await fetch('/api/complete', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    filename: file.name,
+                    size: file.size,
+                    upload_id: startData.upload_id,
+                    uri: startData.uri,
+                    location_url: startData.location_url,
+                    parts: parts
+                })
+            });
+            const compData = await compReq.json();
+
+            document.getElementById('result').innerHTML = `
+                <div class="link-result">
+                    <p>Success! Share link:</p>
+                    <a href="${compData.url}" style="color: #818cf8" target="_blank">${compData.url}</a>
+                </div>
+            `;
+            status.innerText = "Complete!";
+
+        } catch (err) {
+            status.innerText = "Error: " + err.message;
+            btn.disabled = false;
+        }
+    }
+</script>
+</body>
+</html>
