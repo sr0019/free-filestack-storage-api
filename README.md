@@ -1,6 +1,6 @@
 # **free-filestack-storage-api**
 
-This Cloudflare Worker script allows you to upload files of any size and access them anytime via a unique URL. It provides a lightweight and efficient way to handle cloud storage.
+This Cloudflare Worker script allows you to upload files of any size to filestack storage api and access them anytime via a unique URL. It provides a lightweight and efficient way to handle cloud storage.
 
 ## 🚀 Features
 - **Unlimited File Size:** Upload files of any size seamlessly.
