@@ -1,4 +1,4 @@
-# **free-filestack-storage-api**
+# **free-filestack-storage-api-nodejs**
 
 This nodejs/expressjs script allows you to upload files of any size to filestack storage api and access them anytime via a unique URL. It provides a lightweight and efficient way to handle cloud storage.
 
@@ -21,6 +21,7 @@ npm init -y
 
 # Install required dependencies
 npm install express axios body-parser
+```
 ### 3. Configuration
 Open server.js.
 
@@ -34,7 +35,7 @@ Production: Change it to your live URL (e.g., https://your-app.com).
 
 ```bash
 node server.js
-
+```
 ## 🔗 Quick Check
 You can test the API functionality here: [https://up1.sr00.workers.dev/](https://up1.sr00.workers.dev/)
 
